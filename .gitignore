@@ -2,3 +2,4 @@
 *.mp4
 *.DS_store
 videos/
+__pycache__/

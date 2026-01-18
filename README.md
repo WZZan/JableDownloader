@@ -47,10 +47,9 @@ JableTVDownload/
 ├── config.py           # 配置文件
 ├── merge.py            # 影片合併
 ├── delete.py           # 臨時檔案清理
-└── test_m3u8.py        # M3U8功能測試
 ```
 
 ## 依賴套件
 ```bash
-pip install PyQt5 requests beautifulsoup4 selenium m3u8 pycryptodome cloudscraper
+uv sync
 ```
