@@ -1,7 +1,94 @@
 from PyQt5.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
                             QPushButton, QLineEdit, QLabel, QScrollArea, 
-                            QMessageBox, QComboBox)
+                            QMessageBox, QComboBox, QDialog, QListWidget, 
+                            QInputDialog, QFileDialog, QTabWidget)
 from download_item import DownloadItem
+from settings_manager import SettingsManager
+
+class SettingsDialog(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.settings_manager = SettingsManager()
+        self.initUI()
+        
+    def initUI(self):
+        self.setWindowTitle("下載設定")
+        self.setMinimumSize(500, 400)
+        
+        layout = QVBoxLayout()
+        
+        # Tabs for different path types
+        tabs = QTabWidget()
+        self.jav_tab = self.create_path_tab("jav_paths", "JAV 下載路徑 (按優先級排序)")
+        self.short_tab = self.create_path_tab("shortvideo_paths", "91/短視頻 下載路徑 (按優先級排序)")
+        
+        tabs.addTab(self.jav_tab['widget'], "JAV路徑")
+        tabs.addTab(self.short_tab['widget'], "91/短視頻路徑")
+        
+        layout.addWidget(tabs)
+        
+        # Save button
+        save_btn = QPushButton("保存設定")
+        save_btn.clicked.connect(self.save_settings)
+        layout.addWidget(save_btn)
+        
+        self.setLayout(layout)
+        
+    def create_path_tab(self, key, label_text):
+        widget = QWidget()
+        layout = QVBoxLayout()
+        
+        layout.addWidget(QLabel(label_text))
+        
+        list_widget = QListWidget()
+        paths = self.settings_manager.get_paths(key)
+        for path in paths:
+            list_widget.addItem(path)
+            
+        btn_layout = QHBoxLayout()
+        add_btn = QPushButton("添加路徑")
+        remove_btn = QPushButton("移除選中")
+        
+        add_btn.clicked.connect(lambda: self.add_path(list_widget))
+        remove_btn.clicked.connect(lambda: self.remove_path(list_widget))
+        
+        btn_layout.addWidget(add_btn)
+        btn_layout.addWidget(remove_btn)
+        
+        layout.addWidget(list_widget)
+        layout.addLayout(btn_layout)
+        widget.setLayout(layout)
+        
+        return {'widget': widget, 'list': list_widget, 'key': key}
+        
+    def add_path(self, list_widget):
+        path = QFileDialog.getExistingDirectory(self, "選擇下載目錄")
+        if path:
+            # Check if path already exists in list
+            items = [list_widget.item(i).text() for i in range(list_widget.count())]
+            if path not in items:
+                list_widget.addItem(path)
+    
+    def remove_path(self, list_widget):
+        current_row = list_widget.currentRow()
+        if current_row >= 0:
+            list_widget.takeItem(current_row)
+            
+    def save_settings(self):
+        # Save JAV paths
+        jav_paths = []
+        for i in range(self.jav_tab['list'].count()):
+            jav_paths.append(self.jav_tab['list'].item(i).text())
+        self.settings_manager.set_paths("jav_paths", jav_paths)
+        
+        # Save Shortvideo paths
+        short_paths = []
+        for i in range(self.short_tab['list'].count()):
+            short_paths.append(self.short_tab['list'].item(i).text())
+        self.settings_manager.set_paths("shortvideo_paths", short_paths)
+        
+        QMessageBox.information(self, "成功", "設定已保存！")
+        self.accept()
 
 class MainWindow(QMainWindow):
     """主應用視窗"""
@@ -88,10 +175,12 @@ class MainWindow(QMainWindow):
         start_all_button = QPushButton("全部開始")
         stop_all_button = QPushButton("全部停止")
         remove_all_button = QPushButton("全部移除")
+        settings_button = QPushButton("設定")
         
         control_layout.addWidget(start_all_button)
         control_layout.addWidget(stop_all_button)
         control_layout.addWidget(remove_all_button)
+        control_layout.addWidget(settings_button)
         
         main_layout.addLayout(control_layout)
         
@@ -104,6 +193,7 @@ class MainWindow(QMainWindow):
         start_all_button.clicked.connect(self.start_all_downloads)
         stop_all_button.clicked.connect(self.stop_all_downloads)
         remove_all_button.clicked.connect(self.remove_all_downloads)
+        settings_button.clicked.connect(self.open_settings)
         
         # 連接平台選擇器的變化事件
         self.platform_selector.currentTextChanged.connect(self.on_platform_changed)
@@ -111,6 +201,11 @@ class MainWindow(QMainWindow):
         # 初始化顯示狀態
         self.on_platform_changed(self.platform_selector.currentText())
         
+    def open_settings(self):
+        """打開設定對話框"""
+        dialog = SettingsDialog(self)
+        dialog.exec_()
+
     def on_platform_changed(self, platform):
         """處理平台選擇變化"""
         if platform == "M3U8":

@@ -8,6 +8,7 @@ import cloudscraper
 from PyQt5.QtCore import QThread
 from signals import WorkerSignals
 from crawler import CustomCrawler
+from settings_manager import SettingsManager
 
 class DownloadWorker(QThread):
     """下载视频的工作线程"""
@@ -87,32 +88,30 @@ class DownloadWorker(QThread):
                 videoName = url.split('/')[-1] or "unknown_video"
             
             # 使用正则表达式找到m3u8 URL
-            result = re.search("https://.+m3u8", htmlfile)
+            # 修改為更精確的正則表達式，避免貪婪匹配
+            result = re.search(r"https?://[^\"']+\.m3u8", htmlfile)
             if not result:
                 dr.quit()
                 self.report_progress(-1, "未能找到m3u8视频链接")
                 return
             m3u8url = result.group(0)
+            self.report_progress(21, f"找到m3u8链接: {m3u8url}")
+            
             m3u8urlList = m3u8url.split('/')
             m3u8urlList.pop(-1)
             downloadurl = ('/'.join(m3u8urlList)).replace('\\','/')
             
-            # 获取文件路径
-            pathn = "D:/Game/xeditor.crx/JableTVDownload/videos/JAV"
-            path2 = "E:/xeditor/videos/JAV"
-            path3 = "J:/xeditor/videos/JAV"
-            
-            # 确定存储路径
-            folderPath = None
-            for path in [path3, path2, pathn]:
-                if os.path.exists(path):
-                    folderPath = os.path.join(path, dirName)
-                    if not os.path.exists(folderPath):
-                        os.makedirs(folderPath)
-                    break
+            # 獲取文件路径
+            settings = SettingsManager()
+            folderPath = settings.get_valid_path("jav_paths")
             
             if not folderPath:
-                folderPath = os.path.join(pathn, dirName)
+                # Should not happen with default settings, but as a fallback
+                folderPath = os.path.join("D:/Game/xeditor.crx/JableTVDownload/videos/JAV", dirName)
+                if not os.path.exists(folderPath):
+                    os.makedirs(folderPath)
+            else:
+                folderPath = os.path.join(folderPath, dirName)
                 if not os.path.exists(folderPath):
                     os.makedirs(folderPath)
             
@@ -129,7 +128,9 @@ class DownloadWorker(QThread):
             urllib.request.urlretrieve(m3u8url, m3u8file)
             
             # 解析m3u8文件
-            m3u8obj = m3u8.load(m3u8file)
+            with open(m3u8file, 'r', encoding='utf-8') as f:
+                content = f.read()
+            m3u8obj = m3u8.loads(content)
             m3u8uri = ''
             m3u8iv = ''
             
@@ -290,33 +291,17 @@ class DownloadM3u8Worker(QThread):
             folder_name = self.extract_folder_name(video_name)
 
             # 根据路径类型确定存储路径
+            settings = SettingsManager()
             if self.path_type == "91":
-                base_save_paths = [
-                    "J:/xeditor/videos/shortvideos",
-                    "D:/Game/xeditor.crx/JableTVDownload/videos/shortvideos",
-                    "E:/xeditor/videos/shortvideos"
-                ]
+                base_folder_path = settings.get_valid_path("shortvideo_paths")
                 self.report_progress(11, "使用91视频路径保存")
             else:
-                base_save_paths = [
-                    "J:/xeditor/videos/JAV",
-                    "E:/xeditor/videos/JAV",
-                    "D:/Game/xeditor.crx/JableTVDownload/videos/JAV"
-                ]
+                base_folder_path = settings.get_valid_path("jav_paths")
                 self.report_progress(11, "使用JAV路径保存")
 
-            base_folder_path = None
-            for path in base_save_paths:
-                try:
-                    if not os.path.exists(path):
-                        os.makedirs(path)
-                    base_folder_path = path
-                    break
-                except Exception:
-                    continue
-
             if not base_folder_path:
-                base_folder_path = base_save_paths[-1]
+                # Fallback if settings fail
+                base_folder_path = "D:/Game/xeditor.crx/JableTVDownload/videos/JAV"
                 os.makedirs(base_folder_path, exist_ok=True)
 
             # 创建番号文件夹
@@ -355,7 +340,9 @@ class DownloadM3u8Worker(QThread):
 
                 self.report_progress(20, "解析m3u8文件...")
 
-                m3u8_obj = m3u8.load(m3u8_file)
+                with open(m3u8_file, 'r', encoding='utf-8') as f:
+                    content = f.read()
+                m3u8_obj = m3u8.loads(content)
 
                 # 主播放列表处理
                 if m3u8_obj.playlists:
@@ -376,7 +363,9 @@ class DownloadM3u8Worker(QThread):
                     with open(m3u8_file, 'wb') as f:
                         f.write(resp.content)
 
-                    m3u8_obj = m3u8.load(m3u8_file)
+                    with open(m3u8_file, 'r', encoding='utf-8') as f:
+                        content = f.read()
+                    m3u8_obj = m3u8.loads(content)
 
                     # 更新 base url
                     sub_url_parts = sub_m3u8_url.split('/')
@@ -731,22 +720,14 @@ class Download91Worker(QThread):
             
             self.report_progress(35, f"准备下载: {videoName}")
 
-            # 直接使用存储路径，不创建子文件夹
-            path3 = "J:/xeditor/videos/shortvideos"
-            path2 = "D:/Game/xeditor.crx/JableTVDownload/videos/shortvideos"
-            pathn = "D:/Game/xeditor.crx/JableTVDownload/videos/JAV"
-            
             # 确定存储路径
-            folderPath = None
-            for path in [path3, path2, pathn]:
-                if os.path.exists(path):
-                    folderPath = path
-                    break
+            settings = SettingsManager()
+            folderPath = settings.get_valid_path("shortvideo_paths")
             
             if not folderPath:
-                if not os.path.exists(path3):
-                    os.makedirs(path3)
-                folderPath = path3
+                folderPath = "J:/xeditor/videos/shortvideos"
+                if not os.path.exists(folderPath):
+                    os.makedirs(folderPath)
             
             # 检查完整视频文件是否已存在
             final_video_path = os.path.join(folderPath, videoName + '.mp4')
@@ -774,7 +755,9 @@ class Download91Worker(QThread):
                 self.report_progress(45, "解析m3u8文件...")
                 
                 try:
-                    m3u8obj = m3u8.load(m3u8file)
+                    with open(m3u8file, 'r', encoding='utf-8') as f:
+                        content = f.read()
+                    m3u8obj = m3u8.loads(content)
                     m3u8uri = ''
                     m3u8iv = ''
                     

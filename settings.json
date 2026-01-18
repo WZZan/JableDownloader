@@ -1,0 +1,13 @@
+{
+    "jav_paths": [
+        "J:/xeditor/videos/JAV",
+        "E:/xeditor/videos/JAV",
+        "D:/Game/xeditor.crx/JableTVDownload/videos/JAV"
+    ],
+    "shortvideo_paths": [
+        "J:/xeditor/videos/shortvideos",
+        "D:/Game/xeditor.crx/JableTVDownload/videos/shortvideos",
+        "D:/Game/xeditor.crx/JableTVDownload/videos/JAV",
+        "E:/xeditor/videos/shortvideos"
+    ]
+}
