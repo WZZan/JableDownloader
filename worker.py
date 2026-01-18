@@ -73,33 +73,38 @@ class DownloadWorker(QThread):
             
             # 打开浏览器获取页面内容 
             dr = webdriver.Firefox(options=options)
-            dr.get(url)
             
-            self.report_progress(20, "分析页面内容...")
-            
-            htmlfile = dr.page_source
-            soup = BeautifulSoup(htmlfile, 'html.parser')
-            if soup.title and soup.title.string:
-                videoName = soup.title.string
-                if len(videoName) > 33:
-                    videoName = videoName[:-33]
-            else:
-                # 如果无法获取标题，使用URL的一部分作为默认名称
-                videoName = url.split('/')[-1] or "unknown_video"
-            
-            # 使用正则表达式找到m3u8 URL
-            # 修改為更精確的正則表達式，避免貪婪匹配
-            result = re.search(r"https?://[^\"']+\.m3u8", htmlfile)
-            if not result:
+            try:
+                dr.get(url)
+                
+                self.report_progress(20, "分析页面内容...")
+                
+                htmlfile = dr.page_source
+                soup = BeautifulSoup(htmlfile, 'html.parser')
+                if soup.title and soup.title.string:
+                    videoName = soup.title.string
+                    if len(videoName) > 33:
+                        videoName = videoName[:-33]
+                else:
+                    # 如果无法获取标题，使用URL的一部分作为默认名称
+                    videoName = url.split('/')[-1] or "unknown_video"
+                
+                # 使用正则表达式找到m3u8 URL
+                # 修改為更精確的正則表達式，避免貪婪匹配
+                result = re.search(r"https?://[^\"']+\.m3u8", htmlfile)
+                if not result:
+                    self.report_progress(-1, "未能找到m3u8视频链接")
+                    return
+                m3u8url = result.group(0)
+                self.report_progress(21, f"找到m3u8链接: {m3u8url}")
+                
+                m3u8urlList = m3u8url.split('/')
+                m3u8urlList.pop(-1)
+                downloadurl = ('/'.join(m3u8urlList)).replace('\\','/')
+            finally:
+                # 确保浏览器在任何情况下都会被关闭
                 dr.quit()
-                self.report_progress(-1, "未能找到m3u8视频链接")
-                return
-            m3u8url = result.group(0)
-            self.report_progress(21, f"找到m3u8链接: {m3u8url}")
-            
-            m3u8urlList = m3u8url.split('/')
-            m3u8urlList.pop(-1)
-            downloadurl = ('/'.join(m3u8urlList)).replace('\\','/')
+                self.report_progress(22, "浏览器已关闭")
             
             # 獲取文件路径
             settings = SettingsManager()
@@ -607,63 +612,65 @@ class Download91Worker(QThread):
 
             driver = webdriver.Chrome(options=options)
 
-            self.report_progress(10, "加载网页...")
-            
-            # 加载网页
-            driver.get(url)
+            try:
+                self.report_progress(10, "加载网页...")
+                
+                # 加载网页
+                driver.get(url)
 
-            # 等待页面完全加载
-            WebDriverWait(driver, 10).until(
-                EC.presence_of_element_located((By.TAG_NAME, "body"))
-            )
+                # 等待页面完全加载
+                WebDriverWait(driver, 10).until(
+                    EC.presence_of_element_located((By.TAG_NAME, "body"))
+                )
 
-            # 获取渲染后的页面源码
-            rendered_html = driver.page_source
+                # 获取渲染后的页面源码
+                rendered_html = driver.page_source
 
-            self.report_progress(20, "解析页面内容...")
+                self.report_progress(20, "解析页面内容...")
 
-            # 查找strencode2加密的视频源
-            encoded_pattern = re.search(r"document\.write\(strencode2\(\"(.*?)\"\)\);", rendered_html)
-            
-            m3u8url = None
-            if encoded_pattern:
-                try:
-                    # 需要解密strencode2函数
-                    encoded_content = encoded_pattern.group(1)
-                    
-                    # 使用Python版本的解码函数
-                    decrypted_html = strencode(encoded_content)
-                    
-                    # 从解密后的HTML中提取视频源URL - 匹配mp4或m3u8链接
-                    source_pattern = re.search(r'<source src=[\'\"]([^\'\"]+(?:\.mp4|\.m3u8)[^\'\"]*?)[\'\"]', decrypted_html)
-                    if source_pattern:
-                        m3u8url = source_pattern.group(1)
-                        # 记录找到的URL供调试
-                        self.report_progress(25, f"找到视频源: {m3u8url[:50]}...")
-                except Exception as e:
-                    self.report_progress(-1, f"解密内容时出错: {str(e)}")
-            
-            # 如果上面的方法失败，尝试直接查找source标签
-            if not m3u8url:
-                try:
-                    soup = BeautifulSoup(rendered_html, 'html.parser', from_encoding='iso-8859-1')
-                    source_tag = soup.find('source')
-                    if source_tag:
-                        m3u8url = source_tag.get('src')
-                except Exception as e:
-                    self.report_progress(-1, f"查找source标签时出错: {str(e)}")
-            
-            # 如果仍然找不到，可能视频嵌在video.js播放器中
-            if not m3u8url:
-                try:
-                    video_js_pattern = re.search(r'src=[\'\"](https?://[^\'\"]+\.(?:m3u8|mp4))[\'\"]', rendered_html)
-                    if video_js_pattern:
-                        m3u8url = video_js_pattern.group(1)
-                except Exception as e:
-                    self.report_progress(-1, f"查找video.js链接时出错: {str(e)}")
-            
-            # 关闭浏览器
-            driver.quit()
+                # 查找strencode2加密的视频源
+                encoded_pattern = re.search(r"document\.write\(strencode2\(\"(.*?)\"\)\);", rendered_html)
+                
+                m3u8url = None
+                if encoded_pattern:
+                    try:
+                        # 需要解密strencode2函数
+                        encoded_content = encoded_pattern.group(1)
+                        
+                        # 使用Python版本的解码函数
+                        decrypted_html = strencode(encoded_content)
+                        
+                        # 从解密后的HTML中提取视频源URL - 匹配mp4或m3u8链接
+                        source_pattern = re.search(r'<source src=[\'"]([^\'\"]+(?:\.mp4|\.m3u8)[^\'\"]*?)[\'"]', decrypted_html)
+                        if source_pattern:
+                            m3u8url = source_pattern.group(1)
+                            # 记录找到的URL供调试
+                            self.report_progress(25, f"找到视频源: {m3u8url[:50]}...")
+                    except Exception as e:
+                        self.report_progress(-1, f"解密内容时出错: {str(e)}")
+                
+                # 如果上面的方法失败，尝试直接查找source标签
+                if not m3u8url:
+                    try:
+                        soup = BeautifulSoup(rendered_html, 'html.parser', from_encoding='iso-8859-1')
+                        source_tag = soup.find('source')
+                        if source_tag:
+                            m3u8url = source_tag.get('src')
+                    except Exception as e:
+                        self.report_progress(-1, f"查找source标签时出错: {str(e)}")
+                
+                # 如果仍然找不到，可能视频嵌在video.js播放器中
+                if not m3u8url:
+                    try:
+                        video_js_pattern = re.search(r'src=[\'\"](https?://[^\'\"]+\.(?:m3u8|mp4))[\'"]', rendered_html)
+                        if video_js_pattern:
+                            m3u8url = video_js_pattern.group(1)
+                    except Exception as e:
+                        self.report_progress(-1, f"查找video.js链接时出错: {str(e)}")
+            finally:
+                # 确保浏览器在任何情况下都会被关闭
+                driver.quit()
+                self.report_progress(22, "浏览器已关闭")
             
             if not m3u8url:
                 self.report_progress(-1, "未能找到视频源URL")
