@@ -11,224 +11,32 @@ from crawler import CustomCrawler
 from settings_manager import SettingsManager
 
 class DownloadWorker(QThread):
-    """下载视频的工作线程"""
+    """下载视频的工作线程 (Refactored to use Core)"""
     def __init__(self, url):
         super().__init__()
         self.url = url
         self.signals = WorkerSignals()
-        self.is_running = True
-        self.crawler = None
+        # Initialize Core with a wrapper for progress callback
+        # Lazy import to avoid circular dependency if any, though Core should be fine
+        from core import JableDownloaderCore
+        self.core = JableDownloaderCore(self.report_progress_callback)
+
+    def report_progress_callback(self, val, msg):
+        self.signals.progress.emit(val, msg)
 
     def run(self):
         try:
-            # 自定义下载逻辑，用于集成进度报告
-            self.crawler = CustomCrawler(self.report_progress)
-            
-            if not self.is_running:
-                return
-                
-            # 调用主函数处理下载
-            self.custom_main_jabel(self.url)
-            
-            if self.is_running:
+            self.core.download(self.url)
+            if self.core.is_running:
                 self.signals.finished.emit(self.url)
         except Exception as e:
-            if self.is_running:
+            if self.core.is_running:
                 self.signals.error.emit(self.url, str(e))
-    
-    def custom_main_jabel(self, url):
-        """自定义main_jabel函数，集成进度报告"""
-        try:
-            # 准备阶段
-            self.report_progress(0, "准备下载...")
-            
-            # 从原main_jabel获取必要的参数
-            # 不再导入未使用的模块
-            
-            # 获取m3u8参数
-            import re
-            import m3u8
-            import urllib.request
-            import ssl
-            from bs4 import BeautifulSoup
-            from selenium import webdriver
-            from selenium.webdriver.firefox.options import Options
-            
-            self.report_progress(5, "获取视频信息...")
-            
-            ssl._create_default_https_context = ssl._create_unverified_context
-            
-            # 获取URL中的目录名
-            urlSplit = url.split('/')
-            if len(urlSplit) >= 2:
-                dirName = urlSplit[-2]
-            else:
-                dirName = "unknown_dir"
-            
-            # 设置浏览器选项
-            options = Options()
-            options.add_argument('--headless')
-            
-            self.report_progress(10, "启动浏览器...")
-            
-            # 打开浏览器获取页面内容 
-            dr = webdriver.Firefox(options=options)
-            
-            try:
-                dr.get(url)
-                
-                self.report_progress(20, "分析页面内容...")
-                
-                htmlfile = dr.page_source
-                soup = BeautifulSoup(htmlfile, 'html.parser')
-                if soup.title and soup.title.string:
-                    videoName = soup.title.string
-                    if len(videoName) > 33:
-                        videoName = videoName[:-33]
-                else:
-                    # 如果无法获取标题，使用URL的一部分作为默认名称
-                    videoName = url.split('/')[-1] or "unknown_video"
-                
-                # 使用正则表达式找到m3u8 URL
-                # 修改為更精確的正則表達式，避免貪婪匹配
-                result = re.search(r"https?://[^\"']+\.m3u8", htmlfile)
-                if not result:
-                    self.report_progress(-1, "未能找到m3u8视频链接")
-                    return
-                m3u8url = result.group(0)
-                self.report_progress(21, f"找到m3u8链接: {m3u8url}")
-                
-                m3u8urlList = m3u8url.split('/')
-                m3u8urlList.pop(-1)
-                downloadurl = ('/'.join(m3u8urlList)).replace('\\','/')
-            finally:
-                # 确保浏览器在任何情况下都会被关闭
-                dr.quit()
-                self.report_progress(22, "浏览器已关闭")
-            
-            # 獲取文件路径
-            settings = SettingsManager()
-            folderPath = settings.get_valid_path("jav_paths")
-            
-            if not folderPath:
-                # Should not happen with default settings, but as a fallback
-                folderPath = os.path.join("D:/Game/xeditor.crx/JableTVDownload/videos/JAV", dirName)
-                if not os.path.exists(folderPath):
-                    os.makedirs(folderPath)
-            else:
-                folderPath = os.path.join(folderPath, dirName)
-                if not os.path.exists(folderPath):
-                    os.makedirs(folderPath)
-            
-            # 检查完整视频文件是否已存在
-            final_video_path = os.path.join(folderPath, videoName + '.mp4')
-            if os.path.exists(final_video_path):
-                self.report_progress(100, "视频已存在，跳过下载")
-                return
-                
-            self.report_progress(30, "下载m3u8文件...")
-            
-            # 下载m3u8文件
-            m3u8file = os.path.join(folderPath, dirName + '.m3u8').replace('\\','/')
-            urllib.request.urlretrieve(m3u8url, m3u8file)
-            
-            # 解析m3u8文件
-            with open(m3u8file, 'r', encoding='utf-8') as f:
-                content = f.read()
-            m3u8obj = m3u8.loads(content)
-            m3u8uri = ''
-            m3u8iv = ''
-            
-            for key in m3u8obj.keys:
-                if key:
-                    m3u8uri = key.uri
-                    m3u8iv = key.iv
-            
-            # 获取所有ts文件URL
-            ts_list = []
-            for seg in m3u8obj.segments:
-                ts_url = downloadurl + '/' + seg.uri
-                ts_list.append(ts_url)
-            
-            # 处理加密
-            decryptor = None
-            if m3u8uri:
-                self.report_progress(40, "处理加密...")
-                
-                import requests
-                from config import headers
-                from Crypto.Cipher import AES
-                
-                m3u8keyurl = downloadurl + '/' + m3u8uri  # 获取key的URL
-                
-                # 获取key内容
-                response = requests.get(m3u8keyurl, headers=headers, timeout=10)
-                content_key = response.content
-                
-                vt = m3u8iv.replace("0x", "")[:16].encode()  # IV取前16位
-                
-                decryptor = AES.new(content_key, AES.MODE_CBC, vt)  # 构建解码器
-            
-            # 删除m3u8文件
-            self.report_progress(45, "准备下载视频片段...")
-            
-            if os.path.exists(m3u8file):
-                os.remove(m3u8file)
-            
-            # 这里使用我们自定义的爬虫进行下载
-            self.crawler.startCrawl(decryptor, folderPath, ts_list)
-            
-            # 如果下载被停止，就退出
-            if not self.is_running:
-                return
-            
-            self.report_progress(95, "合并视频片段...")
-            
-            # 合成mp4
-            try:
-                from merge import mergeMp4_ffmpeg
-                mergeMp4_ffmpeg(folderPath, ts_list, videoName)
-            except Exception as e:
-                self.report_progress(-1, f"合并失败: {str(e)}")
-                raise e
-            
-            # 删除临时文件
-            self.report_progress(98, "清理临时文件...")
-            try:
-                from delete import deleteMp4
-                deleteMp4(folderPath, videoName)
-            except Exception as e:
-                self.report_progress(-1, f"清理文件失败: {str(e)}")
-            
-            # 下载封面
-            self.report_progress(99, "下载封面...")
-            try:
-                # 下载封面图片的逻辑
-                image_meta = soup.find('meta', property='og:image')
-                if image_meta:
-                    image_url = image_meta.get('content')
-                    image_path = os.path.join(folderPath, 'cover.jpg').replace('\\','/')
-                    urllib.request.urlretrieve(image_url, image_path)
-            except Exception as e:
-                self.report_progress(-1, f"下载封面失败: {str(e)}")
-            
-            # 完成
-            self.report_progress(100, "下载完成")
-            
-        except Exception as e:
-            self.report_progress(-1, f"错误: {str(e)}")
-            raise e
-    
-    def report_progress(self, progress, status_message):
-        """向主线程报告进度"""
-        if self.is_running:
-            self.signals.progress.emit(progress, status_message)
-    
+
     def stop(self):
         """停止下载进程"""
-        self.is_running = False
-        if self.crawler:
-            self.crawler.stop()
+        self.core.stop()
+        self.wait()
 
 class DownloadM3u8Worker(QThread):
     """专门下载m3u8视频的工作线程"""
