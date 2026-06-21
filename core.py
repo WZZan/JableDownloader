@@ -488,7 +488,22 @@ class JableDownloaderCore:
             with open(m3u8file, 'r', encoding='utf-8') as f:
                 content = f.read()
             m3u8obj = m3u8.loads(content)
-            
+
+            # 处理 master 主清单：选择最高画质子清单后重新抓取解析
+            if m3u8obj.is_variant and m3u8obj.playlists:
+                best = max(
+                    m3u8obj.playlists,
+                    key=lambda p: (p.stream_info.bandwidth or 0)
+                )
+                variant_uri = best.uri
+                if not variant_uri.startswith('http'):
+                    variant_uri = url.rsplit('/', 1)[0] + '/' + variant_uri
+                self.report_progress(10, "检测到主清单，切换到最佳画质子清单...")
+                url = variant_uri
+                resp = requests.get(url, headers=headers, timeout=10)
+                content = resp.text
+                m3u8obj = m3u8.loads(content)
+
             ts_list = []
             base_uri = url.rsplit('/', 1)[0]
             for seg in m3u8obj.segments:
