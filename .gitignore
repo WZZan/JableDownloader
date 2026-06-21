@@ -3,3 +3,5 @@
 *.DS_store
 videos/
 __pycache__/
+web.log
+web.pid
