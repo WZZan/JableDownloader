@@ -39,7 +39,7 @@ class CustomCrawler:
             return
 
         try:
-            from config import headers
+            from .config import headers
             import requests
             
             response = requests.get(url, headers=headers, timeout=10)
