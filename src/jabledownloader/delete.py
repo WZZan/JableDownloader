@@ -1,6 +1,4 @@
-import imp
 import os
-import re
 
 def deleteMp4(folderPath,videoName):
     print("正在刪除合成完的影片")

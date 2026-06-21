@@ -5,3 +5,6 @@ videos/
 __pycache__/
 web.log
 web.pid
+*.egg-info/
+build/
+dist/

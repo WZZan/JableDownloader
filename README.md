@@ -1,55 +1,66 @@
-# Jable TV & 91Porn 影片下載器
+# Jable TV / 91Porn / M3U8 影片下載器（Web 版）
 
-更新v2.0版本 - 使用PyQt5製作UI
+以 [NiceGUI](https://nicegui.io/) 打造的網頁版下載器,支援多任務並行下載、自動解密合併。
 
-## 新功能 (v2.1)
+## 支援平台
 
-### 🆕 M3U8直接下載功能
-- 新增專門的M3U8影片下載功能
-- 支援直接輸入M3U8鏈接進行下載
-- 自動處理加密M3U8檔案的解密
-- 支援多線程下載TS片段並自動合併
+1. **Jable TV** — 自動解析頁面取得 m3u8
+2. **91Porn** — 自動解析加密頁面取得影片源
+3. **M3U8** — 直接輸入 m3u8 連結下載(支援 master 主清單、AES 加密)
 
-## 支援的平台
+## 環境需求
 
-1. **Jable TV** - 日本成人影片網站
-2. **91Porn** - 中文成人影片網站  
-3. **M3U8** - 直接下載M3U8格式影片鏈接
+- Python >= 3.10
+- [uv](https://docs.astral.sh/uv/)(套件/環境管理)
+- 影片合併需要系統已安裝 `ffmpeg`(在 PATH 中)
 
-## 使用方法
+## 安裝
 
-### 啟動應用程式
-```bash
-python app.pyw
-```
-
-### 下載影片
-1. 在平台選擇器中選擇對應平台
-2. 輸入影片URL或M3U8鏈接
-3. 點擊「添加」按鈕
-4. 點擊「開始」按鈕開始下載
-
-### M3U8下載說明
-- 選擇「M3U8」平台
-- 輸入完整的.m3u8鏈接地址
-- 系統會自動下載並合併所有TS片段
-- 支援AES加密的M3U8檔案
-
-## 檔案結構
-```
-JableTVDownload/
-├── app.pyw              # 主應用程式
-├── worker.py            # 下載工作線程（包含M3U8Worker）
-├── main_window.py       # 主視窗UI
-├── download_item.py     # 下載項目元件
-├── crawler.py           # 自定義爬蟲
-├── utils.py            # 工具函數
-├── config.py           # 配置文件
-├── merge.py            # 影片合併
-├── delete.py           # 臨時檔案清理
-```
-
-## 依賴套件
 ```bash
 uv sync
+```
+
+## 啟動
+
+### 前景執行（看 log、本機開發）
+```bash
+uv run jable-web
+```
+啟動後開瀏覽器:<http://localhost:8000>
+
+### 背景常駐（推薦：SSH 遠端、斷線不中斷下載）
+透過 WMI 建立脫離 SSH session 的行程,網路斷線時 PC 上的下載不會中斷。
+
+```powershell
+.\scripts\start_web.ps1      # 背景啟動，log 寫入 web.log、PID 記於 web.pid
+Get-Content web.log -Wait    # 隨時查看即時進度（Ctrl+C 只離開檢視，不影響下載）
+.\scripts\stop_web.ps1       # 停止服務
+```
+
+## 使用方式
+
+1. 選擇平台(或用 `Auto` 自動判斷)
+2. 貼上影片網址或 `.m3u8` 連結
+3.（可選)設定儲存位置、自訂檔名、同時下載數
+4.「➕ 加入佇列」→ 系統自動下載 TS 片段、解密、合併為 mp4
+
+下載路徑於 `settings.json` 設定(`jav_paths` / `shortvideo_paths`,依優先序取第一個存在的路徑)。
+
+## 專案結構
+
+```
+JableDownloader/
+├── src/jabledownloader/      # 下載核心套件
+│   ├── web_app.py            # NiceGUI web 入口（jable-web）
+│   ├── core.py               # 各平台下載流程
+│   ├── crawler.py            # 多執行緒 TS 抓取
+│   ├── merge.py              # 合併 TS → mp4
+│   ├── delete.py             # 清理暫存
+│   ├── config.py             # HTTP headers
+│   └── settings_manager.py   # 下載路徑設定
+├── scripts/                  # 背景常駐維運腳本
+│   ├── start_web.ps1
+│   └── stop_web.ps1
+├── settings.json             # 下載路徑設定
+└── pyproject.toml
 ```

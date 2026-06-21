@@ -2,10 +2,9 @@ import threading
 import time
 import uuid
 from dataclasses import dataclass, field
-from typing import List, Dict, Optional
-from nicegui import ui, app
-from core import JableDownloaderCore
-import sys
+from typing import List, Dict
+from nicegui import ui
+from .core import JableDownloaderCore
 
 # ──────────────────────────────────────────────
 # 資料結構
@@ -353,4 +352,9 @@ def main_page():
             ui.timer(1.0, update_queue_list)
 
 
-ui.run(title='Jable Downloader', port=8000, show=False, reload=False)
+def main():
+    ui.run(title='Jable Downloader', port=8000, show=False, reload=False)
+
+
+if __name__ in {"__main__", "__mp_main__"}:
+    main()

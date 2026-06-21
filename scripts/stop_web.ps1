@@ -2,7 +2,7 @@
 # 停止由 start_web.ps1 啟動的背景網頁服務（連同子行程一起結束）。
 
 $ErrorActionPreference = 'Stop'
-$root    = $PSScriptRoot
+$root    = Split-Path $PSScriptRoot -Parent      # 專案根目錄（scripts/ 的上一層）
 $pidFile = Join-Path $root 'web.pid'
 
 if (-not (Test-Path $pidFile)) {

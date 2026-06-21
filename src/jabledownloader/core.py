@@ -16,11 +16,11 @@ from Crypto.Cipher import AES
 import cloudscraper
 import html
 
-from crawler import CustomCrawler
-from settings_manager import SettingsManager
-from config import headers
-from merge import mergeMp4_ffmpeg, mergeMp4
-from delete import deleteMp4, deleteM3u8
+from .crawler import CustomCrawler
+from .settings_manager import SettingsManager
+from .config import headers
+from .merge import mergeMp4_ffmpeg, mergeMp4
+from .delete import deleteMp4, deleteM3u8
 
 class JableDownloaderCore:
     def __init__(self, progress_callback=None):
